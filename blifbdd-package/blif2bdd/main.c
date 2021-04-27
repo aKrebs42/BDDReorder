@@ -6,6 +6,8 @@
 #include "cudd.h"
 #include "bnet.h"
 #include "ntr.h"
+#include <time.h>
+#include <stdlib.h>
 
 
 /*---------------------------------------------------------------------------*/
@@ -43,6 +45,95 @@ static void freeOption ARGS ((NtrOptions * option));
 static DdManager *startCudd ARGS ((NtrOptions * option, int nvars));
 static int ntrReadTree ARGS ((DdManager * dd, char *treefile, int nvars));
 static void DynamicReordering ARGS ((DdManager *dd));
+
+void swap(int* first, int* second)
+{
+	int tmp = *first;
+	*first = *second;
+	*second = tmp;
+}
+
+void cudd_random(DdManager * table)
+{
+	fprintf(stdout, "Starting CUDD Random basic\n");
+	int iter, n, best_size;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	int mem_size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*)malloc(mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		best_order[iter] = iter;
+	}
+	for(iter = 1; iter <=10; ++iter)
+	{
+		srand(time(NULL));
+		int i;
+		int* order = (int*)malloc(mem_size);
+		for(i = 0; i < n; ++i)
+		{
+			order[i] = i;
+		}
+		for(i = n - 1; i >= 0; --i)
+		{
+			int j = rand() % (i + 1);
+			swap(&order[j], &order[i]);
+		}
+		int ret = Cudd_ShuffleHeap(table, order);
+		int size = Cudd_ReadNodeCount(table);
+		if(size < best_size)
+		{
+			best_size = size;
+			memcpy(best_order, order, mem_size);
+			free(order);
+		}
+		fprintf(stdout, "size: %8d\n", best_size);
+	}
+	fprintf(stdout, "Finished CUDD Random basic\n");
+	free(best_order);
+}
+
+void cudd_random_better(DdManager * table)
+{
+	fprintf(stdout, "Starting CUDD Random better\n");
+	int iter, n, best_size;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	int mem_size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*)malloc(mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		best_order[iter] = iter;
+	}
+	for(iter = 1; iter <=10; ++iter)
+	{
+		srand(time(NULL));
+		int i;
+		int* order = (int*)malloc(mem_size);
+		for(i = 0; i < n; ++i)
+		{
+			order[i] = i;
+		}
+		for(i = n - 1; i >= 0; --i)
+		{
+			int j = rand() % (i + 1);
+			swap(&order[j], &order[i]);
+		}
+		int ret = Cudd_ShuffleHeap(table, order);
+		int size = Cudd_ReadNodeCount(table);
+		if(size < best_size)
+		{
+			best_size = size;
+			memcpy(best_order, order, mem_size);
+			free(order);
+		}
+		fprintf(stdout, "size: %8d\n", best_size);
+	}
+	fprintf(stdout, "Finished CUDD Random better\n");
+	free(best_order);
+}
 
 	int
 main (int argc, char **argv)
@@ -163,12 +254,13 @@ main (int argc, char **argv)
 		fprintf(stdout, "size %8d: %8d\n", i, mysize);
 	}*/
 	//RANDOM_PIVOT is better than RANDOM
-	for(i = 1; i < 11; i++) {
+	/*for(i = 1; i < 11; i++) {
 		//Cudd_ReduceHeap(manager, CUDD_REORDER_RANDOM_PIVOT, 2);
 		Cudd_ReduceHeap(manager, CUDD_REORDER_EXACT, 2);
 		mysize = Cudd_ReadNodeCount(manager);
 		fprintf(stdout, "size %8d: %8d\n", i, mysize);
-	}
+	}*/
+	cudd_random(manager);
 	// ECE/CS 5740/6740 -- Counting BDD size (added 04/19/2021 by Cunxi Yu) end
 	Bnet_bddDump (manager, net, string1, 0, 0);
 
