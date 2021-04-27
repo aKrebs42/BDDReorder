@@ -8,7 +8,7 @@
 #include "ntr.h"
 #include <time.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 /*---------------------------------------------------------------------------*/
 /* Constant declarations */
@@ -46,6 +46,7 @@ static DdManager *startCudd ARGS ((NtrOptions * option, int nvars));
 static int ntrReadTree ARGS ((DdManager * dd, char *treefile, int nvars));
 static void DynamicReordering ARGS ((DdManager *dd));
 
+//Basic swap algorithm
 void swap(int* first, int* second)
 {
 	int tmp = *first;
@@ -53,6 +54,30 @@ void swap(int* first, int* second)
 	*second = tmp;
 }
 
+//Generates a permutation between lower and lower + size
+//The permutation will go directly into the order array given
+void generate_permutation(int* order, int size, int lower)
+{
+	int* used = (int*) malloc(sizeof(int) * size);
+	int i, next;
+	for(i = 0; i < size; ++i)
+	{
+		used[i] = 0;
+	}
+	srand(time(NULL));
+	for(i = 0; i < size; ++i)
+	{
+		do {
+			next = rand() % size;
+		} while (used[next] != 0);
+		used[next] = 1;
+		order[i] = next + lower;
+	}
+	free(used);
+}
+
+//Uses a basic random swap algorithm to generate a random permutation.
+//Continues to do this 10 times and reports the best one found so far.
 void cudd_random(DdManager * table)
 {
 	fprintf(stdout, "Starting CUDD Random basic\n");
@@ -66,11 +91,11 @@ void cudd_random(DdManager * table)
 	{
 		best_order[iter] = iter;
 	}
+	srand(time(NULL));
+	int* order = (int*)malloc(mem_size);
 	for(iter = 1; iter <=10; ++iter)
 	{
-		srand(time(NULL));
 		int i;
-		int* order = (int*)malloc(mem_size);
 		for(i = 0; i < n; ++i)
 		{
 			order[i] = i;
@@ -86,54 +111,122 @@ void cudd_random(DdManager * table)
 		{
 			best_size = size;
 			memcpy(best_order, order, mem_size);
-			free(order);
 		}
 		fprintf(stdout, "size: %8d\n", best_size);
 	}
 	fprintf(stdout, "Finished CUDD Random basic\n");
+	free(order);
 	free(best_order);
 }
 
+//Generates permutations from two cuts to create a unique split
+//Will continue with the cuts for a small period of time.
 void cudd_random_better(DdManager * table)
 {
 	fprintf(stdout, "Starting CUDD Random better\n");
-	int iter, n, best_size;
+	int iter, n, best_size, mem_size;
 	best_size = Cudd_ReadNodeCount(table);
 	n = table->size;
-	int mem_size;
 	mem_size = n * sizeof(int);
 	int* best_order = (int*)malloc(mem_size);
 	for(iter = 0; iter < n; ++iter)
 	{
 		best_order[iter] = iter;
 	}
+	srand(time(NULL));
+	int* order = (int*)malloc(mem_size);
 	for(iter = 1; iter <=10; ++iter)
 	{
-		srand(time(NULL));
-		int i;
-		int* order = (int*)malloc(mem_size);
-		for(i = 0; i < n; ++i)
-		{
-			order[i] = i;
-		}
-		for(i = n - 1; i >= 0; --i)
-		{
-			int j = rand() % (i + 1);
-			swap(&order[j], &order[i]);
-		}
+		generate_permutation(order, n, 0);
 		int ret = Cudd_ShuffleHeap(table, order);
 		int size = Cudd_ReadNodeCount(table);
 		if(size < best_size)
 		{
 			best_size = size;
 			memcpy(best_order, order, mem_size);
-			free(order);
 		}
 		fprintf(stdout, "size: %8d\n", best_size);
 	}
 	fprintf(stdout, "Finished CUDD Random better\n");
+	free(order);
 	free(best_order);
 }
+
+void SIFT(DdManager* table, int var_init, int* order)
+{
+	int iter, n, best_size, mem_size, best_spot;
+	best_spot = var_init;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*) malloc(mem_size);
+	for(iter = var_init; iter < n - 1; ++iter)
+	{
+		swap(&order[iter], &order[iter + 1]);
+		int ret = Cudd_ShuffleHeap(table, order);
+		int size = Cudd_ReadNodeCount(table);
+		if(size < best_size)
+		{
+			best_size = size;
+			best_spot = iter + 1;
+			memcpy(best_order, order, mem_size);
+		}
+	}
+	for(iter = n - 1; iter > 0; --iter)
+	{
+		swap(&order[iter], &order[iter - 1]);
+		int ret = Cudd_ShuffleHeap(table, order);
+		int size = Cudd_ReadNodeCount(table);
+		if(size < best_size)
+		{
+			best_size = size;
+			best_spot = iter - 1;
+			memcpy(best_order, order, mem_size);
+		}
+	}
+	for(iter = 0; iter < best_spot; ++iter)
+	{
+		swap(&order[iter], &order[iter + 1]);
+	}
+	fprintf(stdout, "size: %8d\n", best_size);
+	free(best_order);
+}
+
+void cudd_random_SIFT(DdManager * table)
+{
+	fprintf(stdout, "Starting CUDD Random SIFT\n");
+	int iter, n, best_size, mem_size;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*)malloc(mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		best_order[iter] = iter;
+	}
+	srand(time(NULL));
+	int max;
+	max = 100;
+	if(n < max)
+	{
+		max = n;
+	}
+	int* used = (int*) malloc(mem_size);
+	memset(used, 0, mem_size);
+	int var_idx;
+	for(iter = 1; iter <= max; ++iter)
+	{
+		do {
+			var_idx = rand() % n;
+		} while(used[var_idx] != 0);
+		used[var_idx] = 1;
+		SIFT(table, var_idx, best_order);
+	}
+	fprintf(stdout, "Finished CUDD Random SIFT\n");
+	free(best_order);
+}
+
+
 
 	int
 main (int argc, char **argv)
@@ -260,7 +353,7 @@ main (int argc, char **argv)
 		mysize = Cudd_ReadNodeCount(manager);
 		fprintf(stdout, "size %8d: %8d\n", i, mysize);
 	}*/
-	cudd_random(manager);
+	cudd_random_SIFT(manager);
 	// ECE/CS 5740/6740 -- Counting BDD size (added 04/19/2021 by Cunxi Yu) end
 	Bnet_bddDump (manager, net, string1, 0, 0);
 
