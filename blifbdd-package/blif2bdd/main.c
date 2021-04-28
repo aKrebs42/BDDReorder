@@ -226,6 +226,107 @@ void cudd_random_SIFT(DdManager * table)
 	free(best_order);
 }
 
+void cudd_SIFT(DdManager * table)
+{
+	fprintf(stdout, "Starting CUDD SIFT\n");
+	int iter, n, best_size, mem_size;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*)malloc(mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		best_order[iter] = iter;
+	}
+	srand(time(NULL));
+	int max;
+	max = 1000;
+	int* most_frequent = (int*) malloc(mem_size);
+	memset(most_frequent, 0, mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		most_frequent[iter] = iter;
+	}
+	int var_idx;
+	for(iter = 0; iter < max; ++iter)
+	{
+		var_idx = most_frequent[iter % n];
+		SIFT(table, var_idx, best_order);
+	}
+	fprintf(stdout, "Finished CUDD SIFT\n");
+	free(best_order);
+}
+
+
+void cudd_split(DdManager* table)
+{
+/*	int iter, max, j;
+	for(iter = 0; iter < 10; ++iter)
+	{
+		max = -1;
+		for(j = lower; j <= upper; ++j)
+		{
+
+		}
+	}*/
+	fprintf(stdout, "Starting CUDD Random split\n");
+	int iter, n, best_size, lower, upper;
+	best_size = Cudd_ReadNodeCount(table);
+	n = table->size;
+	int mem_size;
+	mem_size = n * sizeof(int);
+	int* best_order = (int*)malloc(mem_size);
+	for(iter = 0; iter < n; ++iter)
+	{
+		best_order[iter] = iter;
+	}
+	srand(time(NULL));
+	int* order = (int*)malloc(mem_size);
+	for(iter = 1; iter <=10; ++iter)
+	{
+		int i;
+		for(i = 0; i < n; ++i)
+		{
+			order[i] = i;
+		}
+		lower = rand() % n;
+		do {
+			upper = rand() % n;
+		} while(upper == lower);
+		if(lower > upper) {
+			int tmp = lower;
+			lower = upper;
+			upper = tmp;
+		}
+		int modulo = upper - lower;
+		for(i = lower; i <= upper; ++i)
+		{
+			int j = rand() % modulo + lower;
+			swap(&order[j], &order[i]);
+		}
+		modulo = n - upper;
+		for(i = 0; i < lower; ++i) {
+			int j = rand() % modulo + upper;
+			swap(&order[j], &order[i]);
+		}
+		modulo = lower;
+		for(i = upper; i < upper; ++i) {
+			int j = rand() % modulo;
+			swap(&order[j], &order[i]);
+		}
+		int ret = Cudd_ShuffleHeap(table, order);
+		int size = Cudd_ReadNodeCount(table);
+		if(size < best_size)
+		{
+			best_size = size;
+			memcpy(best_order, order, mem_size);
+		}
+		fprintf(stdout, "size: %8d\n", best_size);
+	}
+	fprintf(stdout, "Finished CUDD Random split\n");
+	free(order);
+	free(best_order);
+}
 
 
 	int
@@ -353,7 +454,25 @@ main (int argc, char **argv)
 		mysize = Cudd_ReadNodeCount(manager);
 		fprintf(stdout, "size %8d: %8d\n", i, mysize);
 	}*/
-	cudd_random_SIFT(manager);
+
+	if(argc > 3)
+	{
+		if(STRING_EQUAL (argv[3], "random")) {
+			cudd_random(manager);
+		}
+		else if(STRING_EQUAL (argv[3], "siftrandom")) {
+			cudd_random_SIFT(manager);
+		}
+		else if(STRING_EQUAL (argv[3], "sift")) {
+			cudd_SIFT(manager);
+		}
+		else {
+			cudd_random_better(manager);
+		}
+	}
+	else {
+		cudd_random(manager);
+	}
 	// ECE/CS 5740/6740 -- Counting BDD size (added 04/19/2021 by Cunxi Yu) end
 	Bnet_bddDump (manager, net, string1, 0, 0);
 
@@ -847,7 +966,9 @@ ntrReadOptions (
 			}
 			else
 			{
-				goto usage;
+				//goto usage;
+				//By removing this I can now put in any ordering I want and add them later
+				//TODO: Add in orderings I want above so I can reinsert the goto usage here
 			}
 		}
 		else if (STRING_EQUAL (argv[i], "-autodyn"))
