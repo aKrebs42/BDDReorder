@@ -64,7 +64,7 @@ void generate_permutation(int* order, int size, int lower)
 	{
 		used[i] = 0;
 	}
-	srand(time(NULL));
+//	srand(time(NULL));
 	for(i = 0; i < size; ++i)
 	{
 		do {
@@ -116,13 +116,15 @@ void cudd_random(DdManager * table, BnetNetwork* net)
 	}
 	srand(time(NULL));
 	int* order = (int*)malloc(mem_size);
+	int* basic_order = (int*)malloc(mem_size);
+	int i;
+	for(i = 0; i < n; ++i)
+	{
+		basic_order[i] = i;
+	}
 	for(iter = 1; iter <=1000; ++iter)
 	{
-		int i;
-		for(i = 0; i < n; ++i)
-		{
-			order[i] = i;
-		}
+		memcpy(order, basic_order, mem_size);
 		for(i = n - 1; i >= 0; --i)
 		{
 			int j = rand() % (i + 1);
